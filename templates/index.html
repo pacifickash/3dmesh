@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Model Cutter — Split or Grid</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2d2d35;
+      --text: #e8e8ec;
+      --muted: #8888a0;
+      --accent: #00c2a8;
+      --accent-hover: #00e0c2;
+      --error: #e85d5d;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      margin: 0;
+      padding: 2rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 420px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 0.25rem 0;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    .zone {
+      background: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .zone:hover, .zone.dragover {
+      border-color: var(--accent);
+      background: rgba(0, 194, 168, 0.06);
+    }
+    .zone input[type="file"] {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.9;
+    }
+    .zone .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+    .file-name {
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      word-break: break-all;
+    }
+    .btn {
+      width: 100%;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.9rem 1.25rem;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      margin-top: 1.25rem;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn-primary:disabled {
+      opacity: 0.8;
+      cursor: not-allowed;
+      transform: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .btn-primary.loading {
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .message {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+    }
+    .message.error {
+      background: rgba(232, 93, 93, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(232, 93, 93, 0.3);
+    }
+    .message.success {
+      background: rgba(0, 194, 168, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(0, 194, 168, 0.25);
+    }
+    .downloads {
+      margin-top: 1.5rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+    .downloads a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .downloads a:hover {
+      border-color: var(--accent);
+      background: rgba(0, 194, 168, 0.08);
+      color: var(--accent);
+    }
+    .downloads a .arrow { font-size: 1.1rem; }
+    .cut-info {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+    }
+    .scale-info {
+      margin-top: 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.65rem 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .scale-info .scale-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .scale-info .scale-value {
+      font-family: 'DM Mono', 'Fira Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .scale-info .copy-btn {
+      flex-shrink: 0;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      font-family: inherit;
+    }
+    .scale-info .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .form-group {
+      margin-bottom: 0.75rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .form-group input::placeholder {
+      color: var(--muted);
+      opacity: 0.8;
+    }
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 1.25rem 0 0.5rem 0;
+    }
+    .hidden { display: none !important; }
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      margin-top: 0.25rem;
+    }
+    .mode-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      color: var(--bg);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>3D Model Cutter</h1>
+    <p class="subtitle">Scale your model to fit your build volume and split it into a printable N×N×N grid with alignment peg holes.</p>
+
+    <div class="zone" id="zone" role="button" tabindex="0">
+      <input type="file" id="file" accept=".stl,.obj,.3mf,.ply,.glb,.gltf" />
+      <div class="icon">📁</div>
+      <div>Drop a 3D file here or <strong>click to choose</strong></div>
+      <div class="hint">STL, OBJ, 3MF, PLY, GLB</div>
+      <div class="file-name hidden" id="fileName"></div>
+    </div>
+
+    <div class="section-label">Build volume &amp; grid (optional)</div>
+    <p class="hint" style="margin-bottom: 0.75rem;">Cube side length of your printer build volume (mm). Each grid piece fits in one cube.</p>
+    <div class="form-group">
+      <label for="vol">Cube size (mm)</label>
+      <input type="number" id="vol" value="200" min="1" step="1" />
+    </div>
+
+    <div class="mode-toggle" id="modeToggle">
+      <button type="button" class="mode-btn active" data-mode="cubes">Cubes per axis</button>
+      <button type="button" class="mode-btn" data-mode="scale">Scale factor</button>
+    </div>
+
+    <div id="panelCubes" class="form-group" style="margin-top:0.75rem;">
+      <label for="cubes">Cubes per axis (N×N×N)</label>
+      <input type="number" id="cubes" placeholder="2" min="2" max="10" step="1" title="e.g. 2 = 8 pieces, 3 = 27 pieces" />
+    </div>
+    <div id="panelScale" class="form-group hidden" style="margin-top:0.75rem;">
+      <label for="userScale">Scale factor (integer)</label>
+      <input type="number" id="userScale" placeholder="3" min="1" step="1" title="Model is scaled by this integer factor; cubes per axis are computed automatically" />
+    </div>
+
+    <button type="button" class="btn btn-primary" id="cutBtn" disabled>Cut model</button>
+
+    <div id="message" class="message hidden"></div>
+    <div id="downloads" class="downloads hidden">
+      <a id="linkZip" href="#" download class="download-link"><span class="arrow">↓</span> Download all parts (ZIP)</a>
+      <div class="cut-info" id="cutInfo"></div>
+      <div class="scale-info hidden" id="scaleInfo">
+        <div>
+          <div class="scale-label">Uniform scale applied</div>
+          <div class="scale-value" id="scaleValue"></div>
+        </div>
+        <button class="copy-btn" id="copyBtn" type="button">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const zone = document.getElementById('zone');
+    const fileInput = document.getElementById('file');
+    const fileName = document.getElementById('fileName');
+    const cutBtn = document.getElementById('cutBtn');
+    const message = document.getElementById('message');
+    const downloads = document.getElementById('downloads');
+    const linkZip = document.getElementById('linkZip');
+    const cutInfo = document.getElementById('cutInfo');
+    const scaleInfo = document.getElementById('scaleInfo');
+    const scaleValue = document.getElementById('scaleValue');
+    const copyBtn = document.getElementById('copyBtn');
+
+    let gridMode = 'cubes';
+    document.getElementById('modeToggle').addEventListener('click', (e) => {
+      const btn = e.target.closest('.mode-btn');
+      if (!btn) return;
+      gridMode = btn.dataset.mode;
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.getElementById('panelCubes').classList.toggle('hidden', gridMode !== 'cubes');
+      document.getElementById('panelScale').classList.toggle('hidden', gridMode !== 'scale');
+    });
+
+    function showMessage(text, isError) {
+      message.textContent = text;
+      message.className = 'message ' + (isError ? 'error' : 'success');
+      message.classList.remove('hidden');
+    }
+    function hideMessage() {
+      message.classList.add('hidden');
+    }
+    function hideDownloads() {
+      downloads.classList.add('hidden');
+      scaleInfo.classList.add('hidden');
+    }
+
+    zone.addEventListener('click', () => fileInput.click());
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const f = e.dataTransfer?.files?.[0];
+      if (f) setFile(f);
+    });
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      if (f) setFile(f);
+    });
+
+    function setFile(f) {
+      fileInput.files = null;
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      fileInput.files = dt.files;
+      fileName.textContent = f.name;
+      fileName.classList.remove('hidden');
+      cutBtn.disabled = false;
+      hideMessage();
+      hideDownloads();
+    }
+
+    cutBtn.addEventListener('click', async () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+      cutBtn.disabled = true;
+      cutBtn.classList.add('loading');
+      cutBtn.textContent = 'Cutting… please wait';
+      hideMessage();
+      hideDownloads();
+      showMessage('Processing your model, this may take a moment…', false);
+      const fd = new FormData();
+      fd.append('file', f);
+      const vol = document.getElementById('vol').value.trim();
+      if (vol) fd.append('vol', vol);
+      if (gridMode === 'cubes') {
+        const cubes = document.getElementById('cubes').value.trim();
+        if (cubes) fd.append('cubes', cubes);
+      } else {
+        const us = document.getElementById('userScale').value.trim();
+        if (us) fd.append('user_scale', us);
+      }
+      try {
+        const r = await fetch('/cut', { method: 'POST', body: fd });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          showMessage(data.error || 'Cut failed', true);
+          cutBtn.disabled = false;
+          cutBtn.classList.remove('loading');
+          cutBtn.textContent = 'Cut model';
+          return;
+        }
+        const base = window.location.origin + window.location.pathname.replace(/\/?$/, '');
+        linkZip.href = base + '/download/' + data.job_id;
+        linkZip.download = data.zip_filename;
+        const gridLabel = data.nx + '×' + data.ny + '×' + data.nz;
+        const volLabel = data.vol + '×' + data.vol + '×' + data.vol + ' mm';
+        if (data.grid_mode === 'scale') {
+          cutInfo.textContent = data.num_parts + ' parts · cubes used: ' + gridLabel + ' · Cube: ' + volLabel;
+          document.querySelector('#scaleInfo .scale-label').textContent = 'Scale applied';
+        } else {
+          cutInfo.textContent = data.num_parts + ' parts · ' + gridLabel + ' grid · Cube: ' + volLabel;
+          document.querySelector('#scaleInfo .scale-label').textContent = 'Uniform scale applied';
+        }
+        // Peg summary
+        const pegCounts = data.peg_counts || {};
+        const pegEntries = Object.entries(pegCounts);
+        if (pegEntries.length > 0) {
+          const pegSummary = pegEntries.map(([d, c]) => c + '× ' + d + 'mm peg').join(', ');
+          cutInfo.textContent += ' · Pegs: ' + pegSummary;
+        }
+        scaleValue.textContent = String(data.scale);
+        scaleInfo.classList.remove('hidden');
+        showMessage('Done. Download the ZIP with all parts below.', false);
+        downloads.classList.remove('hidden');
+      } catch (e) {
+        showMessage('Network error: ' + e.message, true);
+      }
+      cutBtn.disabled = false;
+      cutBtn.classList.remove('loading');
+      cutBtn.textContent = 'Cut model';
+    });
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(scaleValue.textContent).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>
